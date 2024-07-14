@@ -55,6 +55,13 @@ function! youcompleteme#hierarchy#StartRequest( kind )
     return
   endif
 
+  if a:kind == 'export'
+    let picture = py3eval('ycm_state.GetHierarchyPicture()')
+    call s:log_msg('picture:' .. string(picture))
+    let @+ = picture
+    return
+  endif
+
   if a:kind == 'addcall'
     let handle = s:lines_and_handles[ s:select - 1 ][ 1 ]
     call s:log_msg('add to handle:' . handle)

@@ -116,7 +116,8 @@ class YouCompleteMe:
 
   def InitializeCurrentHierarchy( self, items, kind ):
     ret = self._current_hierarchy.SetRootNode( items, kind )
-    self._hierarchy_history.insert( 0, self._current_hierarchy )
+    if self._current_hierarchy.IsValid():
+      self._hierarchy_history.insert( 0, self._current_hierarchy )
     return ret
 
 
@@ -205,6 +206,10 @@ class YouCompleteMe:
     self._current_hierarchy.JumpToItem(
         handle,
         self._user_options[ 'goto_buffer_command' ] )
+
+
+  def GetHierarchyPicture( self ):
+    return self._current_hierarchy.HierarchyPicture()
 
 
   def _SetUpServer( self ):

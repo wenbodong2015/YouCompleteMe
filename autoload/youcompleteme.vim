@@ -1773,6 +1773,8 @@ silent! nnoremap <silent> <plug>(YCMAddCallHierarchy)
       \ <cmd>call youcompleteme#hierarchy#StartRequest( 'addcall' )<cr>
 silent! nnoremap <silent> <plug>(YCMHierarchyHistory)
       \ <cmd>call youcompleteme#hierarchy#StartRequest( 'history' )<cr>
+silent! nnoremap <silent> <plug>(YCMExportHierarchy)
+      \ <cmd>call youcompleteme#hierarchy#StartRequest( 'export' )<cr>
 
 " This is basic vim plugin boilerplate
 let &cpo = s:save_cpo

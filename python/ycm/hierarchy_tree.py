@@ -215,6 +215,34 @@ class HierarchyTree:
     return down_lines[0]
 
 
+  def _HierarchyPicture( self, refs : List, indent : str, is_root=False ):
+    pict = ""
+    nodes = self._down_nodes
+    for idx, point in enumerate( refs ):
+      next_node = nodes[ point ]
+      name = next_node._data[ 'name' ]
+      if not is_root:
+        if idx < len( refs ) - 1:
+          cur_indent = indent + " ├─"
+          child_indent = indent + " │ "
+        else:
+          cur_indent = indent + " └─"
+          child_indent = indent + "   "
+      else:
+        cur_indent = indent
+        child_indent = indent
+      line = cur_indent + name + '\n'
+      pict = pict + line
+      if next_node._references:
+        pict = pict + self._HierarchyPicture( next_node._references, child_indent )
+    return pict
+
+
+  def HierarchyPicture( self ):
+    pict = self._HierarchyPicture( [0], "", is_root=True )
+    return pict
+
+
   def JumpToItem( self, handle : int, command ):
     node_index = handle_to_index( handle )
     location_index = handle_to_location_index( handle )
