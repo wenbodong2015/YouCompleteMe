@@ -340,11 +340,7 @@ function! s:SetUpMenu()
   call win_execute( s:popup_id,
                   \ 'setlocal tabstop=' . tabstop )
   call popup_settext( s:popup_id, menu_lines )
-  call win_execute( s:popup_id,
-                  \ 'call cursor( [' . string( s:select ) . ', 1 ] )' )
-  call win_execute( s:popup_id,
-                  \ 'set cursorline cursorlineopt&' )
-
+  call s:RedrawMenu()
 endfunction
 
 function! s:ResolveItem( choice, direction, will_change_root )
