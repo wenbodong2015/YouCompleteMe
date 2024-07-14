@@ -28,11 +28,16 @@ let s:lines_and_handles = v:null
 "  0 means nothing, (Invalid)
 let s:select = -1
 let s:kind = ''
+let s:log_file = expand('$HOME/vimlog.txt')
 
 let s:ingored_keys = [
       \ "\<CursorHold>",
       \ "\<MouseMove>",
       \ ]
+
+function! s:log_msg( msg )
+"  call writefile([a:msg], s:log_file, 'a')
+endfunction
 
 function! youcompleteme#hierarchy#StartRequest( kind )
   if !py3eval( 'vimsupport.VimSupportsPopupWindows()' )
@@ -52,13 +57,27 @@ function! youcompleteme#hierarchy#StartRequest( kind )
 
   if a:kind == 'addcall'
     let handle = s:lines_and_handles[ s:select - 1 ][ 1 ]
+    call s:log_msg('add to handle:' . handle)
     let lines_and_handles = py3eval(
       \ 'ycm_state.AddCurrentHierarchy( ' .
       \ 'vimsupport.GetIntValue( "handle" ), ' .
       \ 'GetRawCommandResponse( ' .
       \ '[ "CallHierarchy" ], False ))' )
+    call s:log_msg('lines_and_handles:' .. string(lines_and_handles))
     let s:lines_and_handles = lines_and_handles
     call s:SetUpMenu()
+    return
+  endif
+
+  if a:kind == 'history'
+    let lines_and_handles = py3eval('ycm_state.GetHierarchyHistory()')
+    call s:log_msg('history:' .. string(lines_and_handles))
+    if len( lines_and_handles )
+      let s:lines_and_handles = lines_and_handles
+      let s:select = 1
+      let s:kind = a:kind
+      call s:SetUpMenu()
+    endif
     return
   endif
 
@@ -68,6 +87,7 @@ function! youcompleteme#hierarchy#StartRequest( kind )
       \ 'ycm_state.InitializeCurrentHierarchy( GetRawCommandResponse( ' .
       \ '[ "CallHierarchy" ], False ), ' .
       \ 'vim.eval( "a:kind" ) )' )
+    call s:log_msg('lines_and_handles:' .. string(lines_and_handles))
   else
     let lines_and_handles = py3eval(
       \ 'ycm_state.InitializeCurrentHierarchy( GetRawCommandResponse( ' .
@@ -100,7 +120,70 @@ function! s:RedrawMenu()
   endif
 endfunction
 
-function! s:MenuFilter( winid, key )
+function! s:CommonMenuFilter( winid, key )
+  let pos = popup_getpos( s:popup_id )
+  if a:key == "\<Up>" || a:key == "\<C-p>" || a:key == "\<C-k>" || a:key == "k"
+    let s:select -= 1
+    if s:select < 1
+      let s:select = 1
+    endif
+    call s:RedrawMenu()
+    return 1
+  endif
+  if a:key == "\<PageUp>" || a:key == "\<kPageUp>"
+    let s:select -= pos.core_height
+    if s:select < 1
+      let s:select = 1
+    endif
+    call s:RedrawMenu()
+    return 1
+  endif
+  if a:key == "\<Down>" || a:key == "\<C-n>" || a:key == "\<C-j>" || a:key == "j"
+    let s:select += 1
+    if s:select > len( s:lines_and_handles )
+      let s:select = len( s:lines_and_handles )
+    endif
+    call s:RedrawMenu()
+    return 1
+  endif
+  if a:key == "\<PageDown>" || a:key == "\<kPageDown>"
+    let s:select += pos.core_height
+    if s:select > len( s:lines_and_handles )
+      let s:select = len( s:lines_and_handles )
+    endif
+    call s:RedrawMenu()
+    return 1
+  endif
+  if index( s:ingored_keys, a:key ) >= 0
+    return 0
+  endif
+  if a:key == "\<Esc>" || a:key == "\<C-c>"
+    call popup_close( s:popup_id, [ s:select - 1, 'cancel', v:none ] )
+  endif
+  return 1
+  " Close the popup on any other key press
+"   call popup_close( s:popup_id, [ s:select - 1, 'cancel', v:none ] )
+"   if a:key == "\<Esc>" || a:key == "\<C-c>"
+"     return 1
+"   endif
+"   return 0
+endfunction
+
+function! s:HistoryMenuFilter( winid, key )
+  call s:log_msg('HistoryMenuFilter winid=' . a:winid . ', key=' . a:key)
+  let pos = popup_getpos( s:popup_id )
+
+  if a:key == "\<CR>"
+    let s:kind = 'call'
+    call popup_close( s:popup_id, [ s:select - 1, 'jump_history', 1 ] )
+    return 1
+  endif
+
+  return s:CommonMenuFilter( a:winid, a:key )
+endfunction
+
+function! s:MainMenuFilter( winid, key )
+  call s:log_msg('MainMenuFilter winid=' . a:winid . ', key=' . a:key)
   let pos = popup_getpos( s:popup_id )
   if a:key == "\<S-Tab>"
     " Root changes if we're showing super-tree of a sub-tree of the root
@@ -138,52 +221,22 @@ function! s:MenuFilter( winid, key )
     call popup_close( s:popup_id, [ s:select - 1, 'jump', v:none ] )
     return 1
   endif
-  if a:key == "\<Up>" || a:key == "\<C-p>" || a:key == "\<C-k>" || a:key == "k"
-    let s:select -= 1
-    if s:select < 1
-      let s:select = 1
-    endif
-    call s:RedrawMenu()
-    return 1
+
+  return s:CommonMenuFilter( a:winid, a:key )
+endfunction
+
+function! s:MenuFilter( winid, key )
+  if s:kind == "history"
+    return s:HistoryMenuFilter( a:winid, a:key )
+  else
+    return s:MainMenuFilter( a:winid, a:key )
   endif
-  if a:key == "\<PageUp>" || a:key == "\<kPageUp>"
-    let s:select -= pos.core_height
-    if s:select < 1
-      let s:select = 1
-    endif
-    call s:RedrawMenu()
-    return 1
-  endif
-  if a:key == "\<Down>" || a:key == "\<C-n>" || a:key == "\<C-j>" || a:key == "j"
-    let s:select += 1
-    if s:select > len( s:lines_and_handles )
-      let s:select = len( s:lines_and_handles )
-    endif
-    call s:RedrawMenu()
-    return 1
-  endif
-  if a:key == "\<PageDown>" || a:key == "\<kPageDown>"
-    let s:select += pos.core_height
-    if s:select > len( s:lines_and_handles )
-      let s:select = len( s:lines_and_handles )
-    endif
-    call s:RedrawMenu()
-    return 1
-  endif
-  if index( s:ingored_keys, a:key ) >= 0
-    return 0
-  endif
-  " Close the popup on any other key press
-  call popup_close( s:popup_id, [ s:select - 1, 'cancel', v:none ] )
-  if a:key == "\<Esc>" || a:key == "\<C-c>"
-    return 1
-  endif
-  return 0
 endfunction
 
 function! s:MenuCallback( winid, result )
   let operation = a:result[ 1 ]
   let selection = a:result[ 0 ]
+  call s:log_msg('MenuCallback operation:' . operation . ' selection:' . selection)
   if operation == 'resolve_down'
     call s:ResolveItem( selection, 'down', a:result[ 2 ] )
   elseif operation == 'resolve_up'
@@ -192,15 +245,16 @@ function! s:MenuCallback( winid, result )
     call s:ResolveItem( selection, 'close', a:result[ 2 ] )
   elseif operation == 'resolve_remove'
     call s:ResolveItem( selection, 'remove', a:result[ 2 ] )
-  else
-    if operation == 'jump'
-      let handle = s:lines_and_handles[ selection ][ 1 ]
-      py3 ycm_state.JumpToHierarchyItem( vimsupport.GetIntValue( "handle" ) )
-    endif
+  elseif operation == 'jump'
+    let handle = s:lines_and_handles[ selection ][ 1 ]
+    py3 ycm_state.JumpToHierarchyItem( vimsupport.GetIntValue( "handle" ) )
+  elseif operation == 'jump_history'
+    call s:ResolveItem( selection, 'jump_history', a:result[ 2 ] )
   endif
 endfunction
 
 function! s:SetUpMenu()
+  call s:log_msg('SetUpMenu enter')
   let opts = #{
     \   filter: funcref( 's:MenuFilter' ),
     \   callback: funcref( 's:MenuCallback' ),
@@ -212,6 +266,7 @@ function! s:SetUpMenu()
     \   padding: [ 0, 0, 0, 0 ],
     \   highlight: 'Normal',
     \   border: [],
+    \   title: ' ' .. s:kind .. ' ',
     \ }
   if &ambiwidth ==# 'single' && &encoding ==? 'utf-8'
     let opts[ 'borderchars' ] = [ '─', '│', '─', '│', '╭', '╮', '╯', '╰' ]
@@ -272,6 +327,7 @@ function! s:SetUpMenu()
           \ . "\t"
           \ .. trunc_desc
     call add( menu_lines, { 'text': line, 'props': props } )
+    call s:log_msg('add menu_lines' . line)
 
   endfor
   call win_execute( s:popup_id,
@@ -281,16 +337,22 @@ function! s:SetUpMenu()
                   \ 'call cursor( [' . string( s:select ) . ', 1 ] )' )
   call win_execute( s:popup_id,
                   \ 'set cursorline cursorlineopt&' )
+
 endfunction
 
 function! s:ResolveItem( choice, direction, will_change_root )
   let handle = s:lines_and_handles[ a:choice ][ 1 ]
+  call s:log_msg('ResolveItem selection:' . a:choice . ', direction:'
+        \ . a:direction . ', will_change_root: ' . string( a:will_change_root)
+        \ .', handle:' . handle
+        \)
   if py3eval(
       \ 'ycm_state.ShouldResolveItem( vimsupport.GetIntValue( "handle" ), vim.eval( "a:direction" ) )' )
     let lines_and_handles_with_offset = py3eval(
         \ 'ycm_state.UpdateCurrentHierarchy( ' .
         \ 'vimsupport.GetIntValue( "handle" ), ' .
         \ 'vim.eval( "a:direction" ) )' )
+    call s:log_msg('lines_and_handles_with_offset:' .. string(lines_and_handles_with_offset))
     let s:lines_and_handles = lines_and_handles_with_offset[ 0 ]
     if a:will_change_root
       " When re-rooting the tree, put the cursor on the new "root" item, as this

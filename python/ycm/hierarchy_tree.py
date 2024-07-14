@@ -18,6 +18,7 @@
 from typing import Optional, List
 from ycm import vimsupport
 import os
+import logging
 
 
 class HierarchyNode:
@@ -61,10 +62,11 @@ def make_handle( index : int, location_index : int ):
 
 
 class HierarchyTree:
-  def __init__( self ):
+  def __init__( self, logger ):
     self._up_nodes : List[ HierarchyNode ] = []
     self._down_nodes : List[ HierarchyNode ] = []
     self._kind : str = ''
+    self._logger = logger
 
   def SetRootNode( self, items, kind : str ):
     if items:
@@ -122,7 +124,6 @@ class HierarchyTree:
     else:
       return False
 
-
   def _CloseNode( self, node: HierarchyNode ):
     nodes = self._down_nodes
     if node._references:
@@ -146,7 +147,11 @@ class HierarchyTree:
     self._kind = ''
 
 
-  def _HierarchyToLinesHelper( self, refs, use_down_nodes ):
+  def IsValid( self ):
+    return len( self._down_nodes ) > 0 or len( self._up_nodes ) > 0
+
+
+  def _HierarchyToLinesHelper( self, refs, use_down_nodes, recursive=True ):
     partial_result = []
     nodes = self._down_nodes if use_down_nodes else self._up_nodes
     for index in refs:
@@ -192,7 +197,7 @@ class HierarchyTree:
           )
           for location_index, l in enumerate( next_node._data[ 'locations' ] )
         ] )
-      if next_node._references:
+      if recursive and next_node._references:
         partial_result.extend(
           self._HierarchyToLinesHelper(
             next_node._references, use_down_nodes ) )
@@ -203,6 +208,11 @@ class HierarchyTree:
     up_lines = self._HierarchyToLinesHelper( [ 0 ], False )
     up_lines.reverse()
     return up_lines + down_lines[ 1: ]
+
+
+  def TitleLine( self ):
+    down_lines = self._HierarchyToLinesHelper( [0], True, recursive=False )
+    return down_lines[0]
 
 
   def JumpToItem( self, handle : int, command ):

@@ -110,11 +110,14 @@ class YouCompleteMe:
     self._SetUpLogging()
     self._SetUpServer()
     self._ycmd_keepalive.Start()
-    self._current_hierarchy = HierarchyTree()
+    self._current_hierarchy = HierarchyTree(self._logger)
+    self._hierarchy_history : List[ HierarchyTree ] = []
 
 
   def InitializeCurrentHierarchy( self, items, kind ):
-    return self._current_hierarchy.SetRootNode( items, kind )
+    ret = self._current_hierarchy.SetRootNode( items, kind )
+    self._hierarchy_history.insert( 0, self._current_hierarchy )
+    return ret
 
 
   def UpdateCurrentHierarchy( self, handle : int, direction : str ):
@@ -125,6 +128,9 @@ class YouCompleteMe:
       ret = self._current_hierarchy.RemoveNode( handle )
       offset = -1 if ret else 0
       return self._current_hierarchy.HierarchyToLines(), offset
+    elif direction == 'jump_history':
+      self.SelectHistory( handle )
+      return self._current_hierarchy.HierarchyToLines(), 0
     elif not self._current_hierarchy.UpdateChangesRoot( handle, direction ):
       items = self._ResolveHierarchyItem( handle, direction )
       self._current_hierarchy.UpdateHierarchy( handle, items, direction )
@@ -160,6 +166,24 @@ class YouCompleteMe:
       return self._current_hierarchy.HierarchyToLines()
 
 
+  def GetHierarchyHistory( self ):
+    title_lst = []
+    for index, htree in enumerate( self._hierarchy_history ):
+      title = htree.TitleLine()
+      # change handle
+      title = (title[0], index)
+      title_lst.append( title )
+    return title_lst
+
+
+  def SelectHistory( self, handle : int ):
+    if handle < 0 or handle >= len( self._hierarchy_history ):
+      return
+    tmp = self._hierarchy_history.pop( handle )
+    self._hierarchy_history.insert( 0, tmp )
+    self._current_hierarchy = tmp
+
+
   def _ResolveHierarchyItem( self, handle : int, direction : str ):
     return GetRawCommandResponse(
       self._current_hierarchy.ResolveArguments( handle, direction ),
@@ -168,11 +192,13 @@ class YouCompleteMe:
 
 
   def ShouldResolveItem( self, handle : int, direction : str ):
+    if direction == 'jump_history':
+      return len( self._hierarchy_history ) > 0
     return self._current_hierarchy.ShouldResolveItem( handle, direction )
 
 
   def ResetCurrentHierarchy( self ):
-    self._current_hierarchy.Reset()
+    self._current_hierarchy = HierarchyTree( self._logger )
 
 
   def JumpToHierarchyItem( self, handle ):
